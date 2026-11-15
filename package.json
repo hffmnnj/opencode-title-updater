@@ -1,7 +1,7 @@
 {
   "name": "opencode-title-updater",
-  "version": "0.1.0",
-  "description": "Refresh OpenCode V2 session titles from compaction summaries using your configured title model.",
+  "version": "0.1.1",
+  "description": "Refresh OpenCode V2 session titles after readable or native context compaction.",
   "type": "module",
   "license": "MIT",
   "repository": {

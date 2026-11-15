@@ -25,6 +25,7 @@ function fixture() {
   let waiting = deferred<void>();
   const calls: { input: { model: unknown; prompt: string }; signal?: AbortSignal; answer: ReturnType<typeof deferred<{ text: string }>> }[] = [];
   const updates: { sessionID: string; title: string }[] = [];
+  const nativeCalls: { input: { sessionID: string; prompt: string }; signal?: AbortSignal; answer: ReturnType<typeof deferred<{ text: string }>> }[] = [];
   let signal: AbortSignal | undefined;
   let title = "Old title";
   let directory = "/project";
@@ -45,6 +46,9 @@ function fixture() {
     session: {
       async get() { return { title, location: { directory } }; },
       async update(input: { sessionID: string; title: string }) { updates.push(input); title = input.title; },
+      generate(input: { sessionID: string; prompt: string }, options: { signal?: AbortSignal }) {
+        const answer = deferred<{ text: string }>(); nativeCalls.push({ input, signal: options.signal, answer }); return answer.promise;
+      },
     },
     agent: { async get(input: { agentID: string }) { expect(input).toEqual({ agentID: "title" }); return { data: { model } }; } },
     experimental: { generate: { text(input: { model: unknown; prompt: string }, options: { signal?: AbortSignal }) {
@@ -53,7 +57,7 @@ function fixture() {
   } as unknown as Plugin.Context;
   const cleanup = plugin.setup(ctx) as () => void;
   return {
-    calls, updates, cleanup,
+    calls, nativeCalls, updates, cleanup,
     emit(value: Event) { queue.push(value); waiting.resolve(); },
     setTitle(value: string) { title = value; },
     setDirectory(value: string) { directory = value; },
@@ -83,10 +87,32 @@ describe("compaction title updater", () => {
     expect(f.updates).toEqual([{ sessionID: "s1", title: "Implement caching" }]);
   });
 
-  test("filters other locations, empty or native-only summaries, and missing models", async () => {
+  test("uses the session chat model and context for opaque native compaction", async () => {
+    const f = start();
+    f.emit(event(1, "", { data: { sessionID: "s1", text: "", native: { messages: ["opaque-secret"] } } })); await flush();
+    expect(f.calls).toHaveLength(0); expect(f.nativeCalls).toHaveLength(1);
+    expect(f.nativeCalls[0]!.input.sessionID).toBe("s1");
+    expect(f.nativeCalls[0]!.input.prompt).toContain('"Old title"');
+    expect(f.nativeCalls[0]!.input.prompt).not.toContain("opaque-secret");
+    f.nativeCalls[0]!.answer.resolve({ text: "Native work" }); await flush();
+    expect(f.updates).toEqual([{ sessionID: "s1", title: "Native work" }]);
+  });
+
+  test("cancels native generation when superseded and preserves manual edits", async () => {
+    const f = start();
+    f.emit(event(1, "", { data: { sessionID: "s1", text: "", native: {} } })); await flush();
+    f.emit(event(2, "", { data: { sessionID: "s1", text: "", native: {} } })); await flush();
+    expect(f.nativeCalls).toHaveLength(2); expect(f.nativeCalls[0]!.signal!.aborted).toBe(true);
+    f.setTitle("Manual title");
+    f.nativeCalls[1]!.answer.resolve({ text: "Current" });
+    f.nativeCalls[0]!.answer.resolve({ text: "Stale" }); await flush();
+    expect(f.updates).toEqual([]);
+  });
+
+  test("filters other locations, empty summaries without checkpoints, and missing models", async () => {
     const f = start();
     f.emit(event(1, "other", { location: { directory: "/elsewhere" } }));
-    f.emit(event(2, "  ", { data: { sessionID: "s1", text: "  ", native: { messages: ["opaque"] } } }));
+    f.emit(event(2, "  "));
     f.setDirectory("/elsewhere"); f.emit(event(3, "no location", { location: undefined })); await flush();
     expect(f.calls).toHaveLength(0);
     f.setDirectory("/project"); f.clearModel(); f.emit(event(4)); await flush();
@@ -130,7 +156,8 @@ describe("compaction title updater", () => {
     f.calls[0]!.answer.reject(new Error("sensitive provider output")); await flush();
     f.emit(event(2)); await flush(); f.calls[1]!.answer.resolve({ text: "bad\nsecond line" }); await flush();
     f.emit(event(3)); await flush(); f.calls[2]!.answer.resolve({ text: "x".repeat(81) }); await flush();
-    f.emit(event(4)); await flush(); f.calls[3]!.answer.resolve({ text: "Recovered" }); await flush();
+    f.emit(event(4)); await flush(); f.calls[3]!.answer.resolve({ text: "misleading\u202etitle" }); await flush();
+    f.emit(event(5)); await flush(); f.calls[4]!.answer.resolve({ text: "Recovered" }); await flush();
     expect(f.updates).toEqual([{ sessionID: "s1", title: "Recovered" }]);
   });
 });
