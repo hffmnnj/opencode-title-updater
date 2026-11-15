@@ -12,9 +12,9 @@
 
 **Keep the session title in step with the work.**
 
-Long sessions change direction. After OpenCode compacts the context, Title Updater sends the finished summary and previous title to your configured **title model**, then renames the session to match its current focus.
+Long sessions change direction. After OpenCode compacts the context, Title Updater uses the finished summary and previous title to rename the session to match its current focus. When the summary is an opaque native checkpoint, it asks the session's chat model using the session context instead.
 
-One fresh-context request. No conversation replay, extra sessions, tools, or messages in your history.
+Readable summaries use one fresh-context request. Native checkpoints use an auxiliary generation request in the original session, without adding a message to its history.
 
 ## Install
 
@@ -43,42 +43,39 @@ OpenCode reloads configuration automatically. No server restart is needed.
 ```text
 Context compaction finishes
           │
-          ├── Finished summary
-          └── Previous session title
-                     │
-              Configured title model
-              Fresh, stateless request
+          ├── Readable summary → Configured title model
+          └── Native checkpoint → Session chat model and context
                      │
               Updated session title
 ```
 
 1. Listen for `session.compaction.ended`, for automatic and manual compactions.
-2. Read the session's previous title and resolve `agents.title.model`.
-3. Ask for a short title using only that title and the completed summary. If the previous title still fits, the model can keep it.
+2. Read the session's previous title.
+3. For a readable summary, ask the configured title model for a short title using only that summary and the previous title. For an opaque native checkpoint with no readable summary, ask the session chat model for a title from its current context instead.
 4. Rename the original session only if the result is valid and the operation is still current.
 
-The clean context comes from V2's `experimental.generate.text` API, **not** a temporary session. It has no access to session history, project instructions, or tools. Authentication stays with OpenCode's provider integration.
+For readable summaries, V2's `experimental.generate.text` API has no access to session history, project instructions, or tools. Native checkpoints are not decoded or passed as text: `session.generate` uses the session's own model and current context, which may include messages arriving after compaction. Authentication stays with OpenCode's provider integration.
 
 ## Small by design
 
 | What happens | What does not |
 | --- | --- |
-| One title request per new, eligible compaction | No history scans or transcript replay |
-| The previous title provides continuity | No extra assistant turn or child session |
+| One title request per new, eligible compaction | No plugin-side transcript replay |
+| The previous title provides continuity | No extra assistant turn in the original session |
 | Newer compactions supersede older title work | No stale result intentionally overwrites newer work |
 | Title edits made during generation are respected | No unconditional rename after a slow response |
-| Failures leave the existing title in place | No fallback to a different provider or model |
+| Failures leave the existing title in place | No guessed model when a readable summary lacks a configured title model |
 | Unloading cancels pending work | No polling, scheduled jobs, or persistent plugin state |
 
 The package has one runtime dependency: the official `@opencode/plugin` SDK.
 
 ## Boundaries
 
-- **Configure a title model.** If `agents.title.model` is absent, the plugin skips the update rather than guessing OpenCode's title-model fallback.
-- **Text summaries only.** Empty summaries and native-only opaque checkpoints are skipped. The plugin never decrypts or replays native provider checkpoints.
+- **Configure a title model for readable summaries.** If `agents.title.model` is absent, the plugin skips that update rather than guessing OpenCode's title-model fallback. Native checkpoints use the session's chat model instead.
+- **Native checkpoints remain opaque.** With an empty summary and native checkpoint, the plugin asks the session's chat model for a title using its current context. An empty summary without a native checkpoint is skipped. The plugin never decrypts or sends a checkpoint as text.
 - **A short, plain-text title is required.** Empty, multiline, malformed, or excessively long responses do not replace the title.
 - **Manual names are not permanently pinned.** Each later compaction may update the current title. A rename made while a title request is running is preserved for that request.
-- **Provider usage applies.** An eligible compaction makes an additional generation request to the configured title model. No automatic plugin retries are added.
+- **Provider usage applies.** An eligible compaction makes an additional generation request to the configured title model or, for a native checkpoint, the session's chat model. No automatic plugin retries are added.
 - **Experimental V2 API.** Stateless generation is experimental in OpenCode. This release is built against `@opencode/plugin` 2.2.1; future API changes may require an update.
 
 Warnings identify the plugin and failure category without printing summaries, generated titles, or provider error bodies. Remove the package from `plugins` to disable it.
