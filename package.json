@@ -1,0 +1,40 @@
+{
+  "name": "opencode-title-updater",
+  "version": "0.1.0",
+  "description": "Refresh OpenCode V2 session titles from compaction summaries using your configured title model.",
+  "type": "module",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/hffmnnj/opencode-title-updater.git"
+  },
+  "homepage": "https://github.com/hffmnnj/opencode-title-updater#readme",
+  "bugs": "https://github.com/hffmnnj/opencode-title-updater/issues",
+  "keywords": ["opencode", "opencode-v2", "plugin", "title", "compaction"],
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    }
+  },
+  "files": ["dist", "assets/header.webp", "README.md", "LICENSE"],
+  "scripts": {
+    "build": "tsc -p tsconfig.build.json",
+    "typecheck": "tsc --noEmit",
+    "test": "bun test",
+    "check": "bun run typecheck && bun test && bun run build"
+  },
+  "dependencies": {
+    "@opencode/plugin": "2.2.1"
+  },
+  "devDependencies": {
+    "@types/bun": "1.4.0",
+    "typescript": "5.9.3"
+  },
+  "engines": {
+    "bun": ">=1.4.0"
+  },
+  "publishConfig": {
+    "access": "public"
+  }
+}
