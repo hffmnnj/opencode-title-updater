@@ -1,15 +1,15 @@
 {
   "name": "opencode-title-updater",
-  "version": "0.1.1",
+  "version": "0.1.2",
   "description": "Refresh OpenCode V2 session titles after readable or native context compaction.",
   "type": "module",
   "license": "MIT",
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/hffmnnj/opencode-title-updater.git"
+    "url": "git+https://github.com/hffmnnj/opencode-title-updater-public.git"
   },
-  "homepage": "https://github.com/hffmnnj/opencode-title-updater#readme",
-  "bugs": "https://github.com/hffmnnj/opencode-title-updater/issues",
+  "homepage": "https://github.com/hffmnnj/opencode-title-updater-public#readme",
+  "bugs": "https://github.com/hffmnnj/opencode-title-updater-public/issues",
   "keywords": ["opencode", "opencode-v2", "plugin", "title", "compaction"],
   "exports": {
     ".": {
